@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>今天喝哪家？| 奶茶品牌大转盘</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{
+    min-height:100vh;
+    display:flex;align-items:center;justify-content:center;
+    padding:28px 16px;
+    font-family:"PingFang SC","Microsoft YaHei",system-ui,-apple-system,sans-serif;
+    color:#fff;
+    background:
+      radial-gradient(900px 600px at 50% -10%, #3a2352 0%, transparent 60%),
+      radial-gradient(700px 500px at 90% 100%, #1d2f4d 0%, transparent 55%),
+      #0e0a16;
+    -webkit-font-smoothing:antialiased;
+  }
+  .app{display:flex;flex-direction:column;align-items:center;width:100%;}
+  h1{
+    font-size:clamp(24px,6vw,34px);
+    letter-spacing:2px;font-weight:800;
+    background:linear-gradient(90deg,#ffd93d,#ff8fa3,#9b5de5);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+  }
+  .sub{margin-top:8px;font-size:13px;letter-spacing:1px;color:rgba(255,255,255,.5);text-align:center;}
+
+  .wheel-wrap{
+    position:relative;
+    width:min(86vw,460px);
+    aspect-ratio:1;
+    margin:26px auto 0;
+  }
+  .wheel-wrap::before{
+    content:'';position:absolute;inset:-14px;border-radius:50%;z-index:0;
+    background:conic-gradient(from 0deg,#ffd93d,#ff8fa3,#9b5de5,#4d9de0,#ffd93d);
+    filter:blur(20px);opacity:.35;
+    animation:rot 9s linear infinite;
+  }
+  @keyframes rot{to{transform:rotate(360deg)}}
+
+  canvas{
+    position:relative;z-index:1;
+    width:100%;height:100%;display:block;
+    border-radius:50%;
+    will-change:transform;
+  }
+
+  .pointer{
+    position:absolute;top:-16px;left:50%;transform:translateX(-50%);
+    width:0;height:0;z-index:4;
+    border-left:15px solid transparent;
+    border-right:15px solid transparent;
+    border-top:34px solid #fff;
+    filter:drop-shadow(0 4px 8px rgba(0,0,0,.6));
+  }
+
+  .spin-btn{
+    position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+    width:26%;aspect-ratio:1;border-radius:50%;z-index:3;
+    border:none;cursor:pointer;
+    background:linear-gradient(160deg,#ffffff,#ded7f2);
+    color:#2b1d3d;font-weight:800;letter-spacing:2px;
+    font-size:clamp(15px,3.6vw,21px);
+    font-family:inherit;
+    box-shadow:0 10px 26px rgba(0,0,0,.5), inset 0 -4px 0 rgba(0,0,0,.08);
+    transition:transform .15s ease, opacity .2s;
+  }
+  .spin-btn:active{transform:translate(-50%,-50%) scale(.94);}
+  .spin-btn:disabled{cursor:not-allowed;opacity:.65;}
+
+  .result{
+    margin-top:24px;min-height:34px;text-align:center;
+    font-size:clamp(17px,4.2vw,23px);font-weight:700;
+    color:#fff;letter-spacing:.5px;
+  }
+  .result.pop{animation:pop .5s cubic-bezier(.2,1.4,.5,1);}
+  @keyframes pop{
+    0%{transform:scale(.7);opacity:0;}
+    60%{transform:scale(1.08);opacity:1;}
+    100%{transform:scale(1);}
+  }
+
+  .actions{display:flex;gap:12px;justify-content:center;margin-top:18px;flex-wrap:wrap;}
+  .btn{
+    padding:10px 22px;border-radius:999px;cursor:pointer;
+    border:1px solid rgba(255,255,255,.2);
+    background:rgba(255,255,255,.08);
+    color:#fff;font-size:15px;font-family:inherit;
+    backdrop-filter:blur(8px);
+    transition:.2s;
+  }
+  .btn:hover{background:rgba(255,255,255,.18);border-color:rgba(255,255,255,.35);}
+  .btn:active{transform:scale(.96);}
+
+  .editor{width:min(86vw,460px);margin-top:16px;display:none;}
+  .editor.show{display:block;animation:pop .35s ease;}
+  textarea{
+    width:100%;height:170px;padding:14px;border-radius:16px;
+    border:1px solid rgba(255,255,255,.18);
+    background:rgba(255,255,255,.07);color:#fff;
+    font-size:15px;line-height:1.7;font-family:inherit;
+    resize:vertical;outline:none;
+  }
+  textarea:focus{border-color:rgba(255,255,255,.45);}
+  .editor-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:10px;}
+</style>
+</head>
+<body>
+<div class="app">
+  <h1>今天喝哪家？</h1>
+  <p class="sub" id="subText">常见奶茶连锁大转盘 · 让命运替你做决定</p>
+
+  <div class="wheel-wrap">
+    <canvas id="wheel"></canvas>
+    <div class="pointer"></div>
+    <button class="spin-btn" id="spinBtn">开转</button>
+  </div>
+
+  <div class="result" id="result">转一下，看看今天翻谁的牌子 🧋</div>
+
+  <div class="actions">
+    <button class="btn" id="shuffleBtn">🎲 换一批</button>
+    <button class="btn" id="editBtn">✏️ 编辑品牌</button>
+  </div>
+
+  <div class="editor" id="editor">
+    <textarea id="menuInput" placeholder="每行一个奶茶品牌，最多 30 个"></textarea>
+    <div class="editor-actions">
+      <button class="btn" id="cancelBtn">取消</button>
+      <button class="btn" id="saveBtn">保存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============ 常见奶茶连锁品牌池（全国性高频品牌，30 个） ============ */
+const POOL = [
+  '蜜雪冰城',
+  '古茗',
+  '霸王茶姬',
+  '茶百道',
+  '沪上阿姨',
+  '书亦烧仙草',
+  '喜茶',
+  '益禾堂',
+  '奈雪的茶',
+  '茶颜悦色',
+  '1点点',
+  'CoCo都可',
+  '茉莉奶白',
+  '乐乐茶',
+  '甜啦啦',
+  '茶话弄',
+  'KOI',
+  '贡茶',
+  '快乐柠檬',
+  '7分甜',
+  '悸动烧仙草',
+  '一只酸奶牛',
+  '柠季·手打柠檬茶',
+  'LINLEE林里·手打柠檬茶',
+  '茉酸奶',
+  '阿水大杯茶',
+  '吾饮良品',
+  '冰雪时光',
+  '快乐番薯',
+  '爷爷不泡茶'
+];
+
+const PALETTE = [
+  '#E05B5B','#E88A3C','#D4A62B','#7FA83C','#3FAE6A','#2FA79B',
+  '#3B86C9','#5B6BD6','#8359CF','#C25BA8','#D9607E','#C9743C',
+  '#B4553F','#9A7B2E','#4E9A5B','#3D7FA8','#6B5BC9','#B44E86'
+];
+
+const DEFAULT_COUNT = 16;   // 每次上盘扇区数量（品牌少，扇区文字更清晰）
+const MAX_ITEMS = 30;
+
+/* ============ 画布初始化 ============ */
+const SIZE = 480;
+const canvas = document.getElementById('wheel');
+const ctx = canvas.getContext('2d');
+const DPR = Math.min(3, window.devicePixelRatio || 1);
+canvas.width = SIZE * DPR;
+canvas.height = SIZE * DPR;
+
+const FONT = "'PingFang SC','Microsoft YaHei',system-ui,sans-serif";
+const TAU = Math.PI * 2;
+
+let items = pickRandom(POOL, DEFAULT_COUNT);
+let rotation = 0;
+let spinning = false;
+
+const resultEl = document.getElementById('result');
+const spinBtn = document.getElementById('spinBtn');
+const editor = document.getElementById('editor');
+const menuInput = document.getElementById('menuInput');
+const subText = document.getElementById('subText');
+
+subText.textContent = `奶茶大转盘 · 收录 ${POOL.length} 个品牌，每次随机 ${DEFAULT_COUNT} 个上盘`;
+
+/* ============ 工具 ============ */
+function pickRandom(arr, n){
+  const a = arr.slice();
+  for(let i = a.length - 1; i > 0; i--){
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a.slice(0, n);
+}
+function shorten(s){
+  return s.length > 7 ? s.slice(0, 6) + '…' : s;
+}
+
+/* ============ 绘制转盘 ============ */
+function draw(){
+  const c = SIZE / 2;
+  const R = c - 4;
+  const n = items.length;
+  const seg = TAU / n;
+
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.clearRect(0, 0, SIZE, SIZE);
+
+  for(let i = 0; i < n; i++){
+    ctx.beginPath();
+    ctx.moveTo(c, c);
+    ctx.arc(c, c, R, i * seg, (i + 1) * seg);
+    ctx.closePath();
+    ctx.fillStyle = PALETTE[i % PALETTE.length];
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(255,255,255,.3)';
+    ctx.stroke();
+  }
+
+  const g = ctx.createRadialGradient(c, c, R * 0.35, c, c, R);
+  g.addColorStop(0, 'rgba(255,255,255,.18)');
+  g.addColorStop(0.75, 'rgba(255,255,255,0)');
+  g.addColorStop(1, 'rgba(0,0,0,.22)');
+  ctx.beginPath();
+  ctx.arc(c, c, R, 0, TAU);
+  ctx.fillStyle = g;
+  ctx.fill();
+
+  // 自适应字号
+  let fs = Math.min(21, 340 / n + 4);
+  ctx.font = `700 ${fs}px ${FONT}`;
+  const labels = items.map(shorten);
+  const widest = Math.max(...labels.map(t => ctx.measureText(t).width));
+  const maxW = R - 60;
+  if(widest > maxW){
+    fs = Math.max(8, fs * maxW / widest);
+    ctx.font = `700 ${fs}px ${FONT}`;
+  }
+
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#fff';
+  ctx.shadowColor = 'rgba(0,0,0,.35)';
+  ctx.shadowBlur = 4;
+  ctx.shadowOffsetY = 1;
+
+  for(let i = 0; i < n; i++){
+    ctx.save();
+    ctx.translate(c, c);
+    ctx.rotate(i * seg + seg / 2);
+    ctx.fillText(labels[i], R - 24, 0);
+    ctx.restore();
+  }
+
+  ctx.shadowColor = 'transparent';
+  ctx.shadowBlur = 0;
+  ctx.shadowOffsetY = 0;
+
+  ctx.fillStyle = 'rgba(255,255,255,.9)';
+  for(let k = 0; k < 24; k++){
+    const a = k * Math.PI / 12;
+    ctx.beginPath();
+    ctx.arc(c + Math.cos(a) * (R - 3.5), c + Math.sin(a) * (R - 3.5), 2.6, 0, TAU);
+    ctx.fill();
+  }
+}
+
+/* ============ 旋转 ============ */
+function spin(){
+  if(spinning) return;
+  spinning = true;
+  spinBtn.disabled = true;
+  spinBtn.textContent = '转动中';
+  resultEl.classList.remove('pop');
+  resultEl.textContent = '命运正在旋转…';
+
+  const n = items.length;
+  const seg = TAU / n;
+  const idx = Math.floor(Math.random() * n);
+
+  const base = Math.PI * 1.5 - (idx + 0.5) * seg;
+  const turns = 5 + Math.floor(Math.random() * 3);
+  const target = base + TAU * Math.ceil((rotation + TAU * turns - base) / TAU);
+
+  const start = rotation;
+  const delta = target - start;
+  const dur = 4600 + Math.random() * 900;
+  const t0 = performance.now();
+
+  function frame(now){
+    const p = Math.min(1, (now - t0) / dur);
+    const e = 1 - Math.pow(1 - p, 4);
+    rotation = start + delta * e;
+    canvas.style.transform = `rotate(${rotation}rad)`;
+
+    if(p < 1){
+      requestAnimationFrame(frame);
+    }else{
+      rotation %= TAU;
+      canvas.style.transform = `rotate(${rotation}rad)`;
+      spinning = false;
+      spinBtn.disabled = false;
+      spinBtn.textContent = '再转';
+      showResult(items[idx]);
+    }
+  }
+  requestAnimationFrame(frame);
+}
+
+function showResult(name){
+  resultEl.textContent = `今天就喝「${name}」！`;
+  resultEl.classList.remove('pop');
+  void resultEl.offsetWidth;
+  resultEl.classList.add('pop');
+}
+
+function resetSpin(){
+  rotation = 0;
+  canvas.style.transform = 'rotate(0rad)';
+  spinBtn.textContent = '开转';
+}
+
+/* ============ 交互 ============ */
+spinBtn.addEventListener('click', spin);
+
+document.getElementById('shuffleBtn').addEventListener('click', () => {
+  if(spinning) return;
+  items = pickRandom(POOL, DEFAULT_COUNT);
+  draw();
+  resetSpin();
+  resultEl.classList.remove('pop');
+  resultEl.textContent = '换了一批品牌，再转一次吧～';
+});
+
+document.getElementById('editBtn').addEventListener('click', () => {
+  if(spinning) return;
+  if(!editor.classList.contains('show')) menuInput.value = items.join('\n');
+  editor.classList.toggle('show');
+});
+
+document.getElementById('cancelBtn').addEventListener('click', () => {
+  editor.classList.remove('show');
+});
+
+document.getElementById('saveBtn').addEventListener('click', () => {
+  const list = menuInput.value
+    .split(/[\n,，、;；]+/)
+    .map(s => s.trim())
+    .filter(Boolean);
+
+  if(list.length < 2){
+    alert('至少写两个品牌吧～');
+    return;
+  }
+  items = list.slice(0, MAX_ITEMS);
+  editor.classList.remove('show');
+  draw();
+  resetSpin();
+  resultEl.textContent = '品牌已更新，开始转吧！';
+});
+
+window.addEventListener('keydown', e => {
+  if(e.code === 'Space' && e.target.tagName !== 'TEXTAREA'){
+    e.preventDefault();
+    spin();
+  }
+});
+
+/* ============ 启动 ============ */
+draw();
+</script>
+</body>
+</html>
